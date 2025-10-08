@@ -1,0 +1,17 @@
+name: acoustic-communities
+channels:
+  - conda-forge
+dependencies:
+  - python=3.11
+  - pytorch
+  - matplotlib
+  - netcdf4
+  - xarray
+  - torchvision
+  - torchaudio
+  - tqdm
+  - ipykernel
+  - pip
+  - pip:
+    - e .
+prefix: /Users/gaspardringuenet/miniforge3/envs/acoustic-communities
