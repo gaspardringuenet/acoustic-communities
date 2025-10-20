@@ -2,6 +2,8 @@ import xarray as xr
 import numpy as np
 import matplotlib.pyplot as plt
 
+
+
 def plot_sv_rgb(
     sv: xr.DataArray,
     outfile: str = "Sv_RGB_38_70_120kHz.png",

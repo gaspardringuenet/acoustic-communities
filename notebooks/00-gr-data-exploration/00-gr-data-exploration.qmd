@@ -1,0 +1,128 @@
+---
+title: TAOPIOCA acoustic data initial exploration
+author: Gaspard Ringuenet
+
+format:
+  html:
+    code-fold: true
+
+jupyter: acoustic-communities-local
+---
+
+:::
+
+```{python}
+# Imports
+import os
+
+import matplotlib.pyplot as plt
+from PIL import Image
+
+# Local imports
+from src.exploration.io import load_survey_ds, print_file_infos
+from src.exploration.visualization import plot_survey_map, plot_sv_channels_faceted, plot_3d_scatter, plot_hexbin_2d, plot_hist, plot_sv_dist_combined
+from src.exploration.processing import ds_to_sv, filter_depth, compute_differences, flatten_valid, sample_safe
+
+# Hyperparameters
+SURVEY = "abracos1_3pings1m"    # which survey to use as input (see src.exploration.data_config.py)
+FORCE_PLOT = False              # whether to plot even if the image file already exists in notebooks/output/
+SV_THRESHOLD = -120             # threshold for min Sv (accross channels), in dB. ESUs with one channel below threshold are removed from analyses
+N_SAMPLES = 100_000             # number of samples for Sv differences distribution plots   
+```
+
+```{python}
+# Load survey and print basic information
+ds = load_survey_ds(SURVEY)
+print_file_infos(ds)
+```
+
+We begin by importing the echointegrated files in netCDF format as an `xarray.Dataset`. Here we focus on the following survey / echointegration: `{python} SURVEY`.
+
+```{python}
+# Plot map of the survey
+img_file = f"output/figures/{SURVEY}_survey_map.png"
+if not os.path.isfile(img_file) or FORCE_PLOT:
+    plot_survey_map(ds, outfile=img_file)
+```
+
+![Survey (`{python} SURVEY`) map.](`{python} img_file`){#fig-map width="80%"}
+
+```{python}
+img_file = f"output/figures/{SURVEY}_4Cfacet.png"
+if not os.path.isfile(img_file) or FORCE_PLOT:
+    plot_sv_channels_faceted(
+        ds["Sv"],
+        outfile=img_file,
+        cmap="inferno",
+        figsize=(20, 12),
+        vmin=-100,
+        vmax=-50,
+        sample_pixels=10_000_000
+    )
+```
+
+![Whole survey echogram (`{python} SURVEY`) per channel.](`{python} img_file`){#fig-map width="90%"}
+
+# Show Sv distributions
+
+```{python}
+
+FORCE_PLOT = True
+
+FIGSIZE = (6, 5)
+
+# 3D scatterplot in the 0 - 200 m depth range
+sv = ds_to_sv(ds, sv_threshold=SV_THRESHOLD)
+sv = filter_depth(sv, max_depth=200)
+sv_diffs = compute_differences(sv, ch_ref=38, ch_list=[70, 120, 200])
+flats = flatten_valid(*sv_diffs.values())
+samples = sample_safe(*flats, n_samples=N_SAMPLES)
+
+outfile = f"output/figures/{SURVEY}_SvDiffDist_3D0-200m_thresh{SV_THRESHOLD}_N{N_SAMPLES}.png"
+if not os.path.isfile(outfile) or FORCE_PLOT:
+    plot_3d_scatter(samples[0], samples[1], samples[2],
+                    outfile=outfile,
+                    figsize=FIGSIZE)
+
+img_0 = Image.open(outfile)
+
+# 2D hexbin plot in the 0 - 500 m depth range
+sv = ds_to_sv(ds, sv_threshold=SV_THRESHOLD)
+sv = filter_depth(sv, max_depth=500)
+sv_diffs = compute_differences(sv, ch_ref=38, ch_list=[70, 120])
+flats = flatten_valid(*sv_diffs.values())
+samples = sample_safe(*flats, n_samples=N_SAMPLES)
+
+outfile = f"output/figures/{SURVEY}_SvDiffDist_2D0-500m_thresh{SV_THRESHOLD}_N{N_SAMPLES}.png"
+if not os.path.isfile(outfile) or FORCE_PLOT:
+    plot_hexbin_2d(samples[0], samples[1],
+                    outfile=outfile,
+                    figsize=FIGSIZE)
+
+img_1 = Image.open(outfile)
+
+# 1D histogram in the 0 - 1000 m range
+sv = ds_to_sv(ds, sv_threshold=SV_THRESHOLD)
+sv = filter_depth(sv, max_depth=1000)
+sv_diffs = compute_differences(sv, ch_ref=38, ch_list=[70])
+flats = flatten_valid(*sv_diffs.values())
+samples = sample_safe(*flats, n_samples=N_SAMPLES)
+
+outfile = f"output/figures/{SURVEY}_SvDiffDist_1D0-1000m_thresh{SV_THRESHOLD}_N{N_SAMPLES}.png"
+if not os.path.isfile(outfile) or FORCE_PLOT:
+    plot_hist(samples[0],
+              outfile=outfile,
+              figsize=FIGSIZE)
+
+img_2 = Image.open(outfile)
+
+outfile = f"output/figures/{SURVEY}_SvDiffDist_combined.png"
+if not os.path.isfile(outfile) or FORCE_PLOT:
+    plot_sv_dist_combined(img_0, img_1, img_2,
+                          outfile=outfile,
+                          figsize=(18, 5))
+```
+
+![Distribution of ESUs in the $\Delta Sv$ space.](output/figures/abracos1_3pings1m_SvDiffDist_combined.png){#fig-combined-dists width="100%"}
+
+:::
