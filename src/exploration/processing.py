@@ -25,10 +25,9 @@ def compute_differences(sv: xr.DataArray,
                         ch_list: list[int] = [70, 120, 200]):
     sv_ref = sv.sel(channel=ch_ref)
     return {
-        ch: sv.sel(channel=ch) - sv_ref
+        f"deltaSv_{int(ch)}-{int(ch_ref)}" : sv.sel(channel=ch) - sv_ref
         for ch in ch_list
     }
-
 
 def flatten_valid(*arrays):
     flats = [arr.values.ravel() for arr in arrays]
