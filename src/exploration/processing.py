@@ -14,6 +14,12 @@ def filter_depth (sv: xr.DataArray,
     return sv.sel(depth=slice(0, max_depth))
 
 
+def get_ch_list(sv: xr.DataArray,
+                max_freq: float = 200,
+                ch_ref: float = 38):
+    return sv['channel'].values[(sv['channel'].values != ch_ref) & (sv['channel'].values <= max_freq)]
+
+
 def compute_differences(sv: xr.DataArray,
                         ch_ref: int = 38,
                         ch_list: list[int] = [70, 120, 200]):

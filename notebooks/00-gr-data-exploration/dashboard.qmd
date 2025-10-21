@@ -20,12 +20,13 @@ jupyter: acoustic-communities-local
 import os
 
 import matplotlib.pyplot as plt
+import numpy as np
 from PIL import Image
 
 # Local imports
 from src.exploration.io import load_survey_ds, print_file_infos
 from src.exploration.visualization import plot_survey_map, plot_sv_channels_faceted, plot_3d_scatter, plot_hexbin_2d, plot_hist, plot_sv_dist_combined, plot_3d_scatter_interactive
-from src.exploration.processing import ds_to_sv, filter_depth, compute_differences, flatten_valid, sample_safe
+from src.exploration.processing import ds_to_sv, filter_depth, get_ch_list, compute_differences, flatten_valid, sample_safe
 ```
 
 ```{python}
@@ -33,21 +34,38 @@ from src.exploration.processing import ds_to_sv, filter_depth, compute_differenc
 #| include: false
 
 # Hyperparameters
+# Acoustics
+SV_THRESHOLD = -120             # threshold for min Sv (accross channels), in dB. ESUs with one channel below threshold are removed from analyses
+REF_FREQ = 38.                  # reference channel to subtract when computing ΔSv
+
+# Plots
+N_SAMPLES = 100_000             # number of samples for ΔSv distribution plots
+FIGSIZE = (6, 5)                # figure size for the ΔSv distribution plots
+FORCE_PLOT = False              # whether to plot even if the image file already exists in notebooks/output/
+```
+
+```{python}
+#| include: false
+
+# Survey
 EI = "abracos1_3pings1m"        # which echointegration file to use as input (see src.exploration.data_config.py)
 SURVEY = "ABRAÇOS I"            # the corresponding survey
-FORCE_PLOT = False              # whether to plot even if the image file already exists in notebooks/output/
-SV_THRESHOLD = -120             # threshold for min Sv (accross channels), in dB. ESUs with one channel below threshold are removed from analyses
-N_SAMPLES = 100_000             # number of samples for Sv differences distribution plots 
-FIGSIZE = (6, 5)  
 ```
 
 ```{python}
 #| include: false
 # Load survey and print basic information
 ds = load_survey_ds(EI)
+
+# Get valid Sv values as xarray.DataArray
+sv = ds_to_sv(ds, sv_threshold=SV_THRESHOLD)
+valid = ~np.isnan(sv)
+valid_any = valid.any(dim=[d for d in sv.dims if d not in ("depth", "channel")])
+valid_depths = sv["depth"].where(valid_any)
+max_valid_depth = valid_depths.max(dim="depth", skipna=True)
 ```
 
-## Row {height=50%}
+## Row {height="50%"}
 
 ```{python}
 #| title: Echogram
@@ -67,7 +85,7 @@ img = Image.open(img_file)
 img
 ```
 
-## Row {height=30%}
+## Row {height="30%"}
 
 ### Column
 
@@ -85,15 +103,20 @@ img
 ### Column {.tabset}
 
 ```{python}
-#| title: 0 - 200 m
-# 3D scatterplot in the 0 - 200 m depth range
-img_file = f"output/figures/{EI}_SvDiffDist_3D0-200m_thresh{SV_THRESHOLD}_N{N_SAMPLES}.png"
+#| title: 3D scatter
+# 3D scatterplot
+from IPython.display import display, Markdown
+
+max_freq = 200.
+max_depth = float(max_valid_depth.sel(channel=max_freq))
+
+img_file = f"output/figures/{EI}_SvDiffDist_3D0-{max_depth}m_thresh{SV_THRESHOLD}_N{N_SAMPLES}.png"
 
 if not os.path.isfile(img_file ) or FORCE_PLOT:
 
-    sv = ds_to_sv(ds, sv_threshold=SV_THRESHOLD)
-    sv = filter_depth(sv, max_depth=200)
-    sv_diffs = compute_differences(sv, ch_ref=38, ch_list=[70, 120, 200])
+    sv = filter_depth(sv, max_depth)
+    ch_list = get_ch_list(sv, max_freq, ch_ref=REF_FREQ)
+    sv_diffs = compute_differences(sv, ch_ref=REF_FREQ, ch_list=ch_list)
     flats = flatten_valid(*sv_diffs.values())
     samples = sample_safe(*flats, n_samples=N_SAMPLES)
 
@@ -102,15 +125,19 @@ if not os.path.isfile(img_file ) or FORCE_PLOT:
                     figsize=FIGSIZE)
 
 img = Image.open(img_file)
-img
+display(img)
+display(Markdown(f"*Figure: 3D scatterplot of {N_SAMPLES} ESUs sampled between 0 and {max_depth} meters.*"))
 ```
 
 ```{python}
-#| title: 0 - 200 m (interactive)
-# 3D scatterplot in the 0 - 200 m depth range
-sv = ds_to_sv(ds, sv_threshold=SV_THRESHOLD)
-sv = filter_depth(sv, max_depth=200)
-sv_diffs = compute_differences(sv, ch_ref=38, ch_list=[70, 120, 200])
+#| title: 3D scatter (interactive)
+# 3D scatterplot in the ~ 0 - 200 m depth range
+max_freq = 200.
+max_depth = float(max_valid_depth.sel(channel=max_freq))
+
+sv = filter_depth(sv, max_depth)
+ch_list = get_ch_list(sv, max_freq, ch_ref=REF_FREQ)
+sv_diffs = compute_differences(sv, ch_ref=REF_FREQ, ch_list=ch_list)
 flats = flatten_valid(*sv_diffs.values())
 samples = sample_safe(*flats, n_samples=N_SAMPLES)
 
@@ -118,15 +145,18 @@ plot_3d_scatter_interactive(samples[0], samples[1], samples[2])
 ```
 
 ```{python}
-#| title: 0 - 500 m
-# 2D hexbin plot in the 0 - 500 m depth range
-img_file  = f"output/figures/{EI}_SvDiffDist_2D0-500m_thresh{SV_THRESHOLD}_N{N_SAMPLES}.png"
+#| title: 2D hexbin
+# 2D hexbin plot in the ~ 0 - 300 m depth range
+max_freq = 120.
+max_depth = float(max_valid_depth.sel(channel=max_freq))
+
+img_file = f"output/figures/{EI}_SvDiffDist_2D0-{max_depth}m_thresh{SV_THRESHOLD}_N{N_SAMPLES}.png"
 
 if not os.path.isfile(img_file ) or FORCE_PLOT:
 
-    sv = ds_to_sv(ds, sv_threshold=SV_THRESHOLD)
-    sv = filter_depth(sv, max_depth=500)
-    sv_diffs = compute_differences(sv, ch_ref=38, ch_list=[70, 120])
+    sv = filter_depth(sv, max_depth)
+    ch_list = get_ch_list(sv, max_freq, ch_ref=REF_FREQ)
+    sv_diffs = compute_differences(sv, ch_ref=REF_FREQ, ch_list=ch_list)
     flats = flatten_valid(*sv_diffs.values())
     samples = sample_safe(*flats, n_samples=N_SAMPLES)
 
@@ -135,19 +165,23 @@ if not os.path.isfile(img_file ) or FORCE_PLOT:
                     figsize=FIGSIZE)
 
 img = Image.open(img_file)
-img
+display(img)
+display(Markdown(f"*Figure: 2D hexbin plot of {N_SAMPLES} ESUs sampled between 0 and {max_depth} meters.*"))
 ```
 
 ```{python}
-#| title: 0 - 1000 m
-# 1D histogram in the 0 - 1000 m range
-img_file  = f"output/figures/{EI}_SvDiffDist_1D0-1000m_thresh{SV_THRESHOLD}_N{N_SAMPLES}.png"
+#| title: 1D hist
+# 1D histogram in the ~ 0 - 500 m range
+max_freq = 70.
+max_depth = float(max_valid_depth.sel(channel=max_freq))
+
+img_file = f"output/figures/{EI}_SvDiffDist_1D0-{max_depth}m_thresh{SV_THRESHOLD}_N{N_SAMPLES}.png"
 
 if not os.path.isfile(img_file ) or FORCE_PLOT:
 
-    sv = ds_to_sv(ds, sv_threshold=SV_THRESHOLD)
-    sv = filter_depth(sv, max_depth=1000)
-    sv_diffs = compute_differences(sv, ch_ref=38, ch_list=[70])
+    sv = filter_depth(sv, max_depth)
+    ch_list = get_ch_list(sv, max_freq, ch_ref=REF_FREQ)
+    sv_diffs = compute_differences(sv, ch_ref=REF_FREQ, ch_list=ch_list)
     flats = flatten_valid(*sv_diffs.values())
     samples = sample_safe(*flats, n_samples=N_SAMPLES)
 
@@ -156,31 +190,34 @@ if not os.path.isfile(img_file ) or FORCE_PLOT:
               figsize=FIGSIZE)
 
 img = Image.open(img_file)
-img
+display(img)
+display(Markdown(f"*Figure: 1D histogram of {N_SAMPLES} ESUs sampled between 0 and {max_depth} meters.*"))
 ```
 
-# ABRAÇOS II
+# ABRAÇOS II    
 
 ```{python}
-#| tags: [parameters]
 #| include: false
 
-# Hyperparameters
+# Survey
 EI = "abracos2_3pings1m"        # which echointegration file to use as input (see src.exploration.data_config.py)
 SURVEY = "ABRAÇOS II"            # the corresponding survey
-FORCE_PLOT = False              # whether to plot even if the image file already exists in notebooks/output/
-SV_THRESHOLD = -120             # threshold for min Sv (accross channels), in dB. ESUs with one channel below threshold are removed from analyses
-N_SAMPLES = 100_000             # number of samples for Sv differences distribution plots 
-FIGSIZE = (6, 5)  
 ```
 
 ```{python}
 #| include: false
 # Load survey and print basic information
 ds = load_survey_ds(EI)
+
+# Get valid Sv values as xarray.DataArray
+sv = ds_to_sv(ds, sv_threshold=SV_THRESHOLD)
+valid = ~np.isnan(sv)
+valid_any = valid.any(dim=[d for d in sv.dims if d not in ("depth", "channel")])
+valid_depths = sv["depth"].where(valid_any)
+max_valid_depth = valid_depths.max(dim="depth", skipna=True)
 ```
 
-## Row {height=50%}
+## Row {height="50%"}
 
 ```{python}
 #| title: Echogram
@@ -200,7 +237,7 @@ img = Image.open(img_file)
 img
 ```
 
-## Row {height=30%}
+## Row {height="30%"}
 
 ### Column
 
@@ -218,15 +255,20 @@ img
 ### Column {.tabset}
 
 ```{python}
-#| title: 0 - 200 m
-# 3D scatterplot in the 0 - 200 m depth range
-img_file = f"output/figures/{EI}_SvDiffDist_3D0-200m_thresh{SV_THRESHOLD}_N{N_SAMPLES}.png"
+#| title: 3D scatter
+# 3D scatterplot
+from IPython.display import display, Markdown
+
+max_freq = 200.
+max_depth = float(max_valid_depth.sel(channel=max_freq))
+
+img_file = f"output/figures/{EI}_SvDiffDist_3D0-{max_depth}m_thresh{SV_THRESHOLD}_N{N_SAMPLES}.png"
 
 if not os.path.isfile(img_file ) or FORCE_PLOT:
 
-    sv = ds_to_sv(ds, sv_threshold=SV_THRESHOLD)
-    sv = filter_depth(sv, max_depth=200)
-    sv_diffs = compute_differences(sv, ch_ref=38, ch_list=[70, 120, 200])
+    sv = filter_depth(sv, max_depth)
+    ch_list = get_ch_list(sv, max_freq, ch_ref=REF_FREQ)
+    sv_diffs = compute_differences(sv, ch_ref=REF_FREQ, ch_list=ch_list)
     flats = flatten_valid(*sv_diffs.values())
     samples = sample_safe(*flats, n_samples=N_SAMPLES)
 
@@ -235,15 +277,19 @@ if not os.path.isfile(img_file ) or FORCE_PLOT:
                     figsize=FIGSIZE)
 
 img = Image.open(img_file)
-img
+display(img)
+display(Markdown(f"*Figure: 3D scatterplot of {N_SAMPLES} ESUs sampled between 0 and {max_depth} meters.*"))
 ```
 
 ```{python}
-#| title: 0 - 200 m (interactive)
-# 3D scatterplot in the 0 - 200 m depth range
-sv = ds_to_sv(ds, sv_threshold=SV_THRESHOLD)
-sv = filter_depth(sv, max_depth=200)
-sv_diffs = compute_differences(sv, ch_ref=38, ch_list=[70, 120, 200])
+#| title: 3D scatter (interactive)
+# 3D scatterplot in the ~ 0 - 200 m depth range
+max_freq = 200.
+max_depth = float(max_valid_depth.sel(channel=max_freq))
+
+sv = filter_depth(sv, max_depth)
+ch_list = get_ch_list(sv, max_freq, ch_ref=REF_FREQ)
+sv_diffs = compute_differences(sv, ch_ref=REF_FREQ, ch_list=ch_list)
 flats = flatten_valid(*sv_diffs.values())
 samples = sample_safe(*flats, n_samples=N_SAMPLES)
 
@@ -251,15 +297,18 @@ plot_3d_scatter_interactive(samples[0], samples[1], samples[2])
 ```
 
 ```{python}
-#| title: 0 - 500 m
-# 2D hexbin plot in the 0 - 500 m depth range
-img_file  = f"output/figures/{EI}_SvDiffDist_2D0-500m_thresh{SV_THRESHOLD}_N{N_SAMPLES}.png"
+#| title: 2D hexbin
+# 2D hexbin plot in the ~ 0 - 300 m depth range
+max_freq = 120.
+max_depth = float(max_valid_depth.sel(channel=max_freq))
+
+img_file = f"output/figures/{EI}_SvDiffDist_2D0-{max_depth}m_thresh{SV_THRESHOLD}_N{N_SAMPLES}.png"
 
 if not os.path.isfile(img_file ) or FORCE_PLOT:
 
-    sv = ds_to_sv(ds, sv_threshold=SV_THRESHOLD)
-    sv = filter_depth(sv, max_depth=500)
-    sv_diffs = compute_differences(sv, ch_ref=38, ch_list=[70, 120])
+    sv = filter_depth(sv, max_depth)
+    ch_list = get_ch_list(sv, max_freq, ch_ref=REF_FREQ)
+    sv_diffs = compute_differences(sv, ch_ref=REF_FREQ, ch_list=ch_list)
     flats = flatten_valid(*sv_diffs.values())
     samples = sample_safe(*flats, n_samples=N_SAMPLES)
 
@@ -268,19 +317,23 @@ if not os.path.isfile(img_file ) or FORCE_PLOT:
                     figsize=FIGSIZE)
 
 img = Image.open(img_file)
-img
+display(img)
+display(Markdown(f"*Figure: 2D hexbin plot of {N_SAMPLES} ESUs sampled between 0 and {max_depth} meters.*"))
 ```
 
 ```{python}
-#| title: 0 - 1000 m
-# 1D histogram in the 0 - 1000 m range
-img_file  = f"output/figures/{EI}_SvDiffDist_1D0-1000m_thresh{SV_THRESHOLD}_N{N_SAMPLES}.png"
+#| title: 1D hist
+# 1D histogram in the ~ 0 - 500 m range
+max_freq = 70.
+max_depth = float(max_valid_depth.sel(channel=max_freq))
+
+img_file = f"output/figures/{EI}_SvDiffDist_1D0-{max_depth}m_thresh{SV_THRESHOLD}_N{N_SAMPLES}.png"
 
 if not os.path.isfile(img_file ) or FORCE_PLOT:
 
-    sv = ds_to_sv(ds, sv_threshold=SV_THRESHOLD)
-    sv = filter_depth(sv, max_depth=1000)
-    sv_diffs = compute_differences(sv, ch_ref=38, ch_list=[70])
+    sv = filter_depth(sv, max_depth)
+    ch_list = get_ch_list(sv, max_freq, ch_ref=REF_FREQ)
+    sv_diffs = compute_differences(sv, ch_ref=REF_FREQ, ch_list=ch_list)
     flats = flatten_valid(*sv_diffs.values())
     samples = sample_safe(*flats, n_samples=N_SAMPLES)
 
@@ -289,31 +342,34 @@ if not os.path.isfile(img_file ) or FORCE_PLOT:
               figsize=FIGSIZE)
 
 img = Image.open(img_file)
-img
+display(img)
+display(Markdown(f"*Figure: 1D histogram of {N_SAMPLES} ESUs sampled between 0 and {max_depth} meters.*"))
 ```
 
 # AMAZOMIX
 
 ```{python}
-#| tags: [parameters]
 #| include: false
 
-# Hyperparameters
+# Survey
 EI = "amazomix_3pings1m"        # which echointegration file to use as input (see src.exploration.data_config.py)
 SURVEY = "AMAZOMIX"            # the corresponding survey
-FORCE_PLOT = False              # whether to plot even if the image file already exists in notebooks/output/
-SV_THRESHOLD = -120             # threshold for min Sv (accross channels), in dB. ESUs with one channel below threshold are removed from analyses
-N_SAMPLES = 100_000             # number of samples for Sv differences distribution plots 
-FIGSIZE = (6, 5)  
 ```
 
 ```{python}
 #| include: false
 # Load survey and print basic information
 ds = load_survey_ds(EI)
+
+# Get valid Sv values as xarray.DataArray
+sv = ds_to_sv(ds, sv_threshold=SV_THRESHOLD)
+valid = ~np.isnan(sv)
+valid_any = valid.any(dim=[d for d in sv.dims if d not in ("depth", "channel")])
+valid_depths = sv["depth"].where(valid_any)
+max_valid_depth = valid_depths.max(dim="depth", skipna=True)
 ```
 
-## Row {height=50%}
+## Row {height="50%"}
 
 ```{python}
 #| title: Echogram
@@ -333,7 +389,7 @@ img = Image.open(img_file)
 img
 ```
 
-## Row {height=30%}
+## Row {height="30%"}
 
 ### Column
 
@@ -351,15 +407,20 @@ img
 ### Column {.tabset}
 
 ```{python}
-#| title: 0 - 200 m
-# 3D scatterplot in the 0 - 200 m depth range
-img_file = f"output/figures/{EI}_SvDiffDist_3D0-200m_thresh{SV_THRESHOLD}_N{N_SAMPLES}.png"
+#| title: 3D scatter
+# 3D scatterplot
+from IPython.display import display, Markdown
+
+max_freq = 200.
+max_depth = float(max_valid_depth.sel(channel=max_freq))
+
+img_file = f"output/figures/{EI}_SvDiffDist_3D0-{max_depth}m_thresh{SV_THRESHOLD}_N{N_SAMPLES}.png"
 
 if not os.path.isfile(img_file ) or FORCE_PLOT:
 
-    sv = ds_to_sv(ds, sv_threshold=SV_THRESHOLD)
-    sv = filter_depth(sv, max_depth=200)
-    sv_diffs = compute_differences(sv, ch_ref=38, ch_list=[70, 120, 200])
+    sv = filter_depth(sv, max_depth)
+    ch_list = get_ch_list(sv, max_freq, ch_ref=REF_FREQ)
+    sv_diffs = compute_differences(sv, ch_ref=REF_FREQ, ch_list=ch_list)
     flats = flatten_valid(*sv_diffs.values())
     samples = sample_safe(*flats, n_samples=N_SAMPLES)
 
@@ -368,15 +429,19 @@ if not os.path.isfile(img_file ) or FORCE_PLOT:
                     figsize=FIGSIZE)
 
 img = Image.open(img_file)
-img
+display(img)
+display(Markdown(f"*Figure: 3D scatterplot of {N_SAMPLES} ESUs sampled between 0 and {max_depth} meters.*"))
 ```
 
 ```{python}
-#| title: 0 - 200 m (interactive)
-# 3D scatterplot in the 0 - 200 m depth range
-sv = ds_to_sv(ds, sv_threshold=SV_THRESHOLD)
-sv = filter_depth(sv, max_depth=200)
-sv_diffs = compute_differences(sv, ch_ref=38, ch_list=[70, 120, 200])
+#| title: 3D scatter (interactive)
+# 3D scatterplot in the ~ 0 - 200 m depth range
+max_freq = 200.
+max_depth = float(max_valid_depth.sel(channel=max_freq))
+
+sv = filter_depth(sv, max_depth)
+ch_list = get_ch_list(sv, max_freq, ch_ref=REF_FREQ)
+sv_diffs = compute_differences(sv, ch_ref=REF_FREQ, ch_list=ch_list)
 flats = flatten_valid(*sv_diffs.values())
 samples = sample_safe(*flats, n_samples=N_SAMPLES)
 
@@ -384,15 +449,18 @@ plot_3d_scatter_interactive(samples[0], samples[1], samples[2])
 ```
 
 ```{python}
-#| title: 0 - 500 m
-# 2D hexbin plot in the 0 - 500 m depth range
-img_file  = f"output/figures/{EI}_SvDiffDist_2D0-500m_thresh{SV_THRESHOLD}_N{N_SAMPLES}.png"
+#| title: 2D hexbin
+# 2D hexbin plot in the ~ 0 - 300 m depth range
+max_freq = 120.
+max_depth = float(max_valid_depth.sel(channel=max_freq))
+
+img_file = f"output/figures/{EI}_SvDiffDist_2D0-{max_depth}m_thresh{SV_THRESHOLD}_N{N_SAMPLES}.png"
 
 if not os.path.isfile(img_file ) or FORCE_PLOT:
 
-    sv = ds_to_sv(ds, sv_threshold=SV_THRESHOLD)
-    sv = filter_depth(sv, max_depth=500)
-    sv_diffs = compute_differences(sv, ch_ref=38, ch_list=[70, 120])
+    sv = filter_depth(sv, max_depth)
+    ch_list = get_ch_list(sv, max_freq, ch_ref=REF_FREQ)
+    sv_diffs = compute_differences(sv, ch_ref=REF_FREQ, ch_list=ch_list)
     flats = flatten_valid(*sv_diffs.values())
     samples = sample_safe(*flats, n_samples=N_SAMPLES)
 
@@ -401,19 +469,23 @@ if not os.path.isfile(img_file ) or FORCE_PLOT:
                     figsize=FIGSIZE)
 
 img = Image.open(img_file)
-img
+display(img)
+display(Markdown(f"*Figure: 2D hexbin plot of {N_SAMPLES} ESUs sampled between 0 and {max_depth} meters.*"))
 ```
 
 ```{python}
-#| title: 0 - 1000 m
-# 1D histogram in the 0 - 1000 m range
-img_file  = f"output/figures/{EI}_SvDiffDist_1D0-1000m_thresh{SV_THRESHOLD}_N{N_SAMPLES}.png"
+#| title: 1D hist
+# 1D histogram in the ~ 0 - 500 m range
+max_freq = 70.
+max_depth = float(max_valid_depth.sel(channel=max_freq))
+
+img_file = f"output/figures/{EI}_SvDiffDist_1D0-{max_depth}m_thresh{SV_THRESHOLD}_N{N_SAMPLES}.png"
 
 if not os.path.isfile(img_file ) or FORCE_PLOT:
 
-    sv = ds_to_sv(ds, sv_threshold=SV_THRESHOLD)
-    sv = filter_depth(sv, max_depth=1000)
-    sv_diffs = compute_differences(sv, ch_ref=38, ch_list=[70])
+    sv = filter_depth(sv, max_depth)
+    ch_list = get_ch_list(sv, max_freq, ch_ref=REF_FREQ)
+    sv_diffs = compute_differences(sv, ch_ref=REF_FREQ, ch_list=ch_list)
     flats = flatten_valid(*sv_diffs.values())
     samples = sample_safe(*flats, n_samples=N_SAMPLES)
 
@@ -422,6 +494,8 @@ if not os.path.isfile(img_file ) or FORCE_PLOT:
               figsize=FIGSIZE)
 
 img = Image.open(img_file)
-img
+display(img)
+display(Markdown(f"*Figure: 1D histogram of {N_SAMPLES} ESUs sampled between 0 and {max_depth} meters.*"))
 ```
+
 
