@@ -87,3 +87,7 @@ target/
 
 # Mypy cache
 .mypy_cache/
+
+# Quarto rendered outputs (if not in reports)
+notebooks/**/*_files/
+notebooks/**/*.html

@@ -1,0 +1,427 @@
+---
+title: "Survey dashboard"
+author: Gaspard Ringuenet
+
+format:
+  dashboard:
+    nav-buttons:
+      - icon: house
+        href: "../../../website/_site/index.html"
+
+jupyter: acoustic-communities-local
+---
+
+# ABRAÇOS I
+
+```{python}
+#| include: false
+
+# Imports
+import os
+
+import matplotlib.pyplot as plt
+from PIL import Image
+
+# Local imports
+from src.exploration.io import load_survey_ds, print_file_infos
+from src.exploration.visualization import plot_survey_map, plot_sv_channels_faceted, plot_3d_scatter, plot_hexbin_2d, plot_hist, plot_sv_dist_combined, plot_3d_scatter_interactive
+from src.exploration.processing import ds_to_sv, filter_depth, compute_differences, flatten_valid, sample_safe
+```
+
+```{python}
+#| tags: [parameters]
+#| include: false
+
+# Hyperparameters
+EI = "abracos1_3pings1m"        # which echointegration file to use as input (see src.exploration.data_config.py)
+SURVEY = "ABRAÇOS I"            # the corresponding survey
+FORCE_PLOT = False              # whether to plot even if the image file already exists in notebooks/output/
+SV_THRESHOLD = -120             # threshold for min Sv (accross channels), in dB. ESUs with one channel below threshold are removed from analyses
+N_SAMPLES = 100_000             # number of samples for Sv differences distribution plots 
+FIGSIZE = (6, 5)  
+```
+
+```{python}
+#| include: false
+# Load survey and print basic information
+ds = load_survey_ds(EI)
+```
+
+## Row {height=50%}
+
+```{python}
+#| title: Echogram
+
+img_file = f"output/figures/{EI}_4Cfacet.png"
+if not os.path.isfile(img_file) or FORCE_PLOT:
+    plot_sv_channels_faceted(
+        ds["Sv"],
+        outfile=img_file,
+        cmap="inferno",
+        figsize=(20, 12),
+        vmin=-100,
+        vmax=-50,
+        sample_pixels=10_000_000
+    )
+img = Image.open(img_file)
+img
+```
+
+## Row {height=30%}
+
+### Column
+
+```{python}
+#| title: Survey map
+
+# Plot map of the survey
+img_file = f"output/figures/{EI}_survey_map.png"
+if not os.path.isfile(img_file) or FORCE_PLOT:
+    plot_survey_map(ds, outfile=img_file)
+img = Image.open(img_file)
+img
+```
+
+### Column {.tabset}
+
+```{python}
+#| title: 0 - 200 m
+# 3D scatterplot in the 0 - 200 m depth range
+img_file = f"output/figures/{EI}_SvDiffDist_3D0-200m_thresh{SV_THRESHOLD}_N{N_SAMPLES}.png"
+
+if not os.path.isfile(img_file ) or FORCE_PLOT:
+
+    sv = ds_to_sv(ds, sv_threshold=SV_THRESHOLD)
+    sv = filter_depth(sv, max_depth=200)
+    sv_diffs = compute_differences(sv, ch_ref=38, ch_list=[70, 120, 200])
+    flats = flatten_valid(*sv_diffs.values())
+    samples = sample_safe(*flats, n_samples=N_SAMPLES)
+
+    plot_3d_scatter(samples[0], samples[1], samples[2],
+                    outfile=img_file ,
+                    figsize=FIGSIZE)
+
+img = Image.open(img_file)
+img
+```
+
+```{python}
+#| title: 0 - 200 m (interactive)
+# 3D scatterplot in the 0 - 200 m depth range
+sv = ds_to_sv(ds, sv_threshold=SV_THRESHOLD)
+sv = filter_depth(sv, max_depth=200)
+sv_diffs = compute_differences(sv, ch_ref=38, ch_list=[70, 120, 200])
+flats = flatten_valid(*sv_diffs.values())
+samples = sample_safe(*flats, n_samples=N_SAMPLES)
+
+plot_3d_scatter_interactive(samples[0], samples[1], samples[2])
+```
+
+```{python}
+#| title: 0 - 500 m
+# 2D hexbin plot in the 0 - 500 m depth range
+img_file  = f"output/figures/{EI}_SvDiffDist_2D0-500m_thresh{SV_THRESHOLD}_N{N_SAMPLES}.png"
+
+if not os.path.isfile(img_file ) or FORCE_PLOT:
+
+    sv = ds_to_sv(ds, sv_threshold=SV_THRESHOLD)
+    sv = filter_depth(sv, max_depth=500)
+    sv_diffs = compute_differences(sv, ch_ref=38, ch_list=[70, 120])
+    flats = flatten_valid(*sv_diffs.values())
+    samples = sample_safe(*flats, n_samples=N_SAMPLES)
+
+    plot_hexbin_2d(samples[0], samples[1],
+                    outfile=img_file ,
+                    figsize=FIGSIZE)
+
+img = Image.open(img_file)
+img
+```
+
+```{python}
+#| title: 0 - 1000 m
+# 1D histogram in the 0 - 1000 m range
+img_file  = f"output/figures/{EI}_SvDiffDist_1D0-1000m_thresh{SV_THRESHOLD}_N{N_SAMPLES}.png"
+
+if not os.path.isfile(img_file ) or FORCE_PLOT:
+
+    sv = ds_to_sv(ds, sv_threshold=SV_THRESHOLD)
+    sv = filter_depth(sv, max_depth=1000)
+    sv_diffs = compute_differences(sv, ch_ref=38, ch_list=[70])
+    flats = flatten_valid(*sv_diffs.values())
+    samples = sample_safe(*flats, n_samples=N_SAMPLES)
+
+    plot_hist(samples[0],
+              outfile=img_file,
+              figsize=FIGSIZE)
+
+img = Image.open(img_file)
+img
+```
+
+# ABRAÇOS II
+
+```{python}
+#| tags: [parameters]
+#| include: false
+
+# Hyperparameters
+EI = "abracos2_3pings1m"        # which echointegration file to use as input (see src.exploration.data_config.py)
+SURVEY = "ABRAÇOS II"            # the corresponding survey
+FORCE_PLOT = False              # whether to plot even if the image file already exists in notebooks/output/
+SV_THRESHOLD = -120             # threshold for min Sv (accross channels), in dB. ESUs with one channel below threshold are removed from analyses
+N_SAMPLES = 100_000             # number of samples for Sv differences distribution plots 
+FIGSIZE = (6, 5)  
+```
+
+```{python}
+#| include: false
+# Load survey and print basic information
+ds = load_survey_ds(EI)
+```
+
+## Row {height=50%}
+
+```{python}
+#| title: Echogram
+
+img_file = f"output/figures/{EI}_4Cfacet.png"
+if not os.path.isfile(img_file) or FORCE_PLOT:
+    plot_sv_channels_faceted(
+        ds["Sv"],
+        outfile=img_file,
+        cmap="inferno",
+        figsize=(20, 12),
+        vmin=-100,
+        vmax=-50,
+        sample_pixels=10_000_000
+    )
+img = Image.open(img_file)
+img
+```
+
+## Row {height=30%}
+
+### Column
+
+```{python}
+#| title: Survey map
+
+# Plot map of the survey
+img_file = f"output/figures/{EI}_survey_map.png"
+if not os.path.isfile(img_file) or FORCE_PLOT:
+    plot_survey_map(ds, outfile=img_file)
+img = Image.open(img_file)
+img
+```
+
+### Column {.tabset}
+
+```{python}
+#| title: 0 - 200 m
+# 3D scatterplot in the 0 - 200 m depth range
+img_file = f"output/figures/{EI}_SvDiffDist_3D0-200m_thresh{SV_THRESHOLD}_N{N_SAMPLES}.png"
+
+if not os.path.isfile(img_file ) or FORCE_PLOT:
+
+    sv = ds_to_sv(ds, sv_threshold=SV_THRESHOLD)
+    sv = filter_depth(sv, max_depth=200)
+    sv_diffs = compute_differences(sv, ch_ref=38, ch_list=[70, 120, 200])
+    flats = flatten_valid(*sv_diffs.values())
+    samples = sample_safe(*flats, n_samples=N_SAMPLES)
+
+    plot_3d_scatter(samples[0], samples[1], samples[2],
+                    outfile=img_file ,
+                    figsize=FIGSIZE)
+
+img = Image.open(img_file)
+img
+```
+
+```{python}
+#| title: 0 - 200 m (interactive)
+# 3D scatterplot in the 0 - 200 m depth range
+sv = ds_to_sv(ds, sv_threshold=SV_THRESHOLD)
+sv = filter_depth(sv, max_depth=200)
+sv_diffs = compute_differences(sv, ch_ref=38, ch_list=[70, 120, 200])
+flats = flatten_valid(*sv_diffs.values())
+samples = sample_safe(*flats, n_samples=N_SAMPLES)
+
+plot_3d_scatter_interactive(samples[0], samples[1], samples[2])
+```
+
+```{python}
+#| title: 0 - 500 m
+# 2D hexbin plot in the 0 - 500 m depth range
+img_file  = f"output/figures/{EI}_SvDiffDist_2D0-500m_thresh{SV_THRESHOLD}_N{N_SAMPLES}.png"
+
+if not os.path.isfile(img_file ) or FORCE_PLOT:
+
+    sv = ds_to_sv(ds, sv_threshold=SV_THRESHOLD)
+    sv = filter_depth(sv, max_depth=500)
+    sv_diffs = compute_differences(sv, ch_ref=38, ch_list=[70, 120])
+    flats = flatten_valid(*sv_diffs.values())
+    samples = sample_safe(*flats, n_samples=N_SAMPLES)
+
+    plot_hexbin_2d(samples[0], samples[1],
+                    outfile=img_file ,
+                    figsize=FIGSIZE)
+
+img = Image.open(img_file)
+img
+```
+
+```{python}
+#| title: 0 - 1000 m
+# 1D histogram in the 0 - 1000 m range
+img_file  = f"output/figures/{EI}_SvDiffDist_1D0-1000m_thresh{SV_THRESHOLD}_N{N_SAMPLES}.png"
+
+if not os.path.isfile(img_file ) or FORCE_PLOT:
+
+    sv = ds_to_sv(ds, sv_threshold=SV_THRESHOLD)
+    sv = filter_depth(sv, max_depth=1000)
+    sv_diffs = compute_differences(sv, ch_ref=38, ch_list=[70])
+    flats = flatten_valid(*sv_diffs.values())
+    samples = sample_safe(*flats, n_samples=N_SAMPLES)
+
+    plot_hist(samples[0],
+              outfile=img_file,
+              figsize=FIGSIZE)
+
+img = Image.open(img_file)
+img
+```
+
+# AMAZOMIX
+
+```{python}
+#| tags: [parameters]
+#| include: false
+
+# Hyperparameters
+EI = "amazomix_3pings1m"        # which echointegration file to use as input (see src.exploration.data_config.py)
+SURVEY = "AMAZOMIX"            # the corresponding survey
+FORCE_PLOT = False              # whether to plot even if the image file already exists in notebooks/output/
+SV_THRESHOLD = -120             # threshold for min Sv (accross channels), in dB. ESUs with one channel below threshold are removed from analyses
+N_SAMPLES = 100_000             # number of samples for Sv differences distribution plots 
+FIGSIZE = (6, 5)  
+```
+
+```{python}
+#| include: false
+# Load survey and print basic information
+ds = load_survey_ds(EI)
+```
+
+## Row {height=50%}
+
+```{python}
+#| title: Echogram
+
+img_file = f"output/figures/{EI}_4Cfacet.png"
+if not os.path.isfile(img_file) or FORCE_PLOT:
+    plot_sv_channels_faceted(
+        ds["Sv"],
+        outfile=img_file,
+        cmap="inferno",
+        figsize=(20, 12),
+        vmin=-100,
+        vmax=-50,
+        sample_pixels=10_000_000
+    )
+img = Image.open(img_file)
+img
+```
+
+## Row {height=30%}
+
+### Column
+
+```{python}
+#| title: Survey map
+
+# Plot map of the survey
+img_file = f"output/figures/{EI}_survey_map.png"
+if not os.path.isfile(img_file) or FORCE_PLOT:
+    plot_survey_map(ds, outfile=img_file)
+img = Image.open(img_file)
+img
+```
+
+### Column {.tabset}
+
+```{python}
+#| title: 0 - 200 m
+# 3D scatterplot in the 0 - 200 m depth range
+img_file = f"output/figures/{EI}_SvDiffDist_3D0-200m_thresh{SV_THRESHOLD}_N{N_SAMPLES}.png"
+
+if not os.path.isfile(img_file ) or FORCE_PLOT:
+
+    sv = ds_to_sv(ds, sv_threshold=SV_THRESHOLD)
+    sv = filter_depth(sv, max_depth=200)
+    sv_diffs = compute_differences(sv, ch_ref=38, ch_list=[70, 120, 200])
+    flats = flatten_valid(*sv_diffs.values())
+    samples = sample_safe(*flats, n_samples=N_SAMPLES)
+
+    plot_3d_scatter(samples[0], samples[1], samples[2],
+                    outfile=img_file ,
+                    figsize=FIGSIZE)
+
+img = Image.open(img_file)
+img
+```
+
+```{python}
+#| title: 0 - 200 m (interactive)
+# 3D scatterplot in the 0 - 200 m depth range
+sv = ds_to_sv(ds, sv_threshold=SV_THRESHOLD)
+sv = filter_depth(sv, max_depth=200)
+sv_diffs = compute_differences(sv, ch_ref=38, ch_list=[70, 120, 200])
+flats = flatten_valid(*sv_diffs.values())
+samples = sample_safe(*flats, n_samples=N_SAMPLES)
+
+plot_3d_scatter_interactive(samples[0], samples[1], samples[2])
+```
+
+```{python}
+#| title: 0 - 500 m
+# 2D hexbin plot in the 0 - 500 m depth range
+img_file  = f"output/figures/{EI}_SvDiffDist_2D0-500m_thresh{SV_THRESHOLD}_N{N_SAMPLES}.png"
+
+if not os.path.isfile(img_file ) or FORCE_PLOT:
+
+    sv = ds_to_sv(ds, sv_threshold=SV_THRESHOLD)
+    sv = filter_depth(sv, max_depth=500)
+    sv_diffs = compute_differences(sv, ch_ref=38, ch_list=[70, 120])
+    flats = flatten_valid(*sv_diffs.values())
+    samples = sample_safe(*flats, n_samples=N_SAMPLES)
+
+    plot_hexbin_2d(samples[0], samples[1],
+                    outfile=img_file ,
+                    figsize=FIGSIZE)
+
+img = Image.open(img_file)
+img
+```
+
+```{python}
+#| title: 0 - 1000 m
+# 1D histogram in the 0 - 1000 m range
+img_file  = f"output/figures/{EI}_SvDiffDist_1D0-1000m_thresh{SV_THRESHOLD}_N{N_SAMPLES}.png"
+
+if not os.path.isfile(img_file ) or FORCE_PLOT:
+
+    sv = ds_to_sv(ds, sv_threshold=SV_THRESHOLD)
+    sv = filter_depth(sv, max_depth=1000)
+    sv_diffs = compute_differences(sv, ch_ref=38, ch_list=[70])
+    flats = flatten_valid(*sv_diffs.values())
+    samples = sample_safe(*flats, n_samples=N_SAMPLES)
+
+    plot_hist(samples[0],
+              outfile=img_file,
+              figsize=FIGSIZE)
+
+img = Image.open(img_file)
+img
+```
+

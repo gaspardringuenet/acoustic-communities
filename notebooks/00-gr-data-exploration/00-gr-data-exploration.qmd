@@ -9,8 +9,6 @@ format:
 jupyter: acoustic-communities-local
 ---
 
-:::
-
 ```{python}
 # Imports
 import os
@@ -124,5 +122,3 @@ if not os.path.isfile(outfile) or FORCE_PLOT:
 ```
 
 ![Distribution of ESUs in the $\Delta Sv$ space.](output/figures/abracos1_3pings1m_SvDiffDist_combined.png){#fig-combined-dists width="100%"}
-
-:::

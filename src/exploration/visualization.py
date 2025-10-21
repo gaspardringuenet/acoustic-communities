@@ -3,7 +3,11 @@ import cartopy.crs as ccrs
 import cartopy.feature as cfeature
 import matplotlib.pyplot as plt
 import numpy as np
+import pandas as pd
+import plotly.express as px
 import xarray as xr
+
+from .data_config import BASE_DIR
 
 def plot_survey_map(ds: xr.Dataset,
                     outfile: str,
@@ -25,7 +29,7 @@ def plot_survey_map(ds: xr.Dataset,
 
     # Using NOAA ETOPO1 data
     # Download: https://www.ngdc.noaa.gov/mgg/global/relief/ETOPO1/data/bedrock/grid_registered/netcdf/
-    etopo = xr.open_dataset("../data/external/spatial/bathymetry/ETOPO1_Bed_g_gmt4.grd")
+    etopo = xr.open_dataset(BASE_DIR / "data/external/spatial/bathymetry/ETOPO1_Bed_g_gmt4.grd")
     bathy = etopo['z']
 
     # Subset bathymetry to your region
@@ -75,7 +79,8 @@ def plot_sv_channels_faceted(sv: xr.DataArray,
                              figsize: tuple = (20, 12),
                              vmin: float | None = None,
                              vmax: float | None = None,
-                             sample_pixels: int | None = 2_000_000):
+                             sample_pixels: int | None = 2_000_000,
+                             verbose: bool = False):
     """
     Plot all Sv channels as facets (subplots) with a single shared colorbar.
     Efficient for very large xarray DataArrays by subsampling.
@@ -112,7 +117,8 @@ def plot_sv_channels_faceted(sv: xr.DataArray,
     stride_t = max(1, int(np.ceil(np.sqrt((time_dim * depth_dim) / max_pixels))))
     stride_d = stride_t
 
-    print(f"Subsampling for plotting: every {stride_t} time steps and every {stride_d} depth levels.")
+    if verbose:
+        print(f"Subsampling for plotting: every {stride_t} time steps and every {stride_d} depth levels.")
 
     # Use a small chunk for vmin/vmax calculation
     if vmin is None or vmax is None:
@@ -155,7 +161,8 @@ def plot_sv_channels_faceted(sv: xr.DataArray,
 
     plt.savefig(outfile, bbox_inches='tight', dpi=300)
     plt.close(fig)
-    print(f"\nFigure saved as '{outfile}'")
+    if verbose:
+        print(f"\nFigure saved as '{outfile}'")
 
 
 def plot_3d_scatter(diff_70_38, diff_120_38, diff_200_38, 
@@ -187,7 +194,7 @@ def plot_3d_scatter(diff_70_38, diff_120_38, diff_200_38,
         ax.set_zlim(diff_200_38_lim[0], diff_200_38_lim[1])
 
     plt.savefig(outfile, bbox_inches='tight', pad_inches=0.1)
-    plt.close();
+    plt.close()
 
 
 def plot_hexbin_2d(diff_70_38, diff_120_38,
@@ -215,7 +222,7 @@ def plot_hexbin_2d(diff_70_38, diff_120_38,
     cb = fig.colorbar(hb, ax=ax, label='counts')
 
     plt.savefig(outfile, bbox_inches='tight')
-    plt.close();
+    plt.close()
 
 
 def plot_hist(diff_70_38,
@@ -236,7 +243,7 @@ def plot_hist(diff_70_38,
         ax.set_xlim(diff_70_38_lim[0], diff_70_38_lim[1])
 
     plt.savefig(outfile, bbox_inches='tight')
-    plt.close();
+    plt.close()
 
 
 def plot_sv_dist_combined(img_0, img_1, img_2,
@@ -256,3 +263,31 @@ def plot_sv_dist_combined(img_0, img_1, img_2,
     plt.tight_layout()
     plt.savefig(outfile, dpi=300)
     plt.close()
+
+
+def plot_3d_scatter_interactive(diff_70_38, diff_120_38, diff_200_38, 
+                                diff_70_38_lim: tuple[float, float] = None,
+                                diff_120_38_lim: tuple[float, float] = None,
+                                diff_200_38_lim: tuple[float, float] = None):
+
+    df = pd.DataFrame({
+        'ΔSv (70 - 38 kHz) [dB]': diff_70_38,
+        'ΔSv (120 - 38 kHz) [dB]': diff_120_38,
+        'ΔSv (200 - 38 kHz) [dB]': diff_200_38
+    })
+
+    fig = px.scatter_3d(df, x='ΔSv (70 - 38 kHz) [dB]', y='ΔSv (120 - 38 kHz) [dB]', z='ΔSv (200 - 38 kHz) [dB]',
+                        #size=1,
+                        #opacity=1e-2,
+                        #color="black",
+                        range_x=diff_70_38_lim,
+                        range_y=diff_120_38_lim,
+                        range_z=diff_200_38_lim)
+    
+    fig.update_traces(marker=dict(
+        size=1,
+        opacity=0.1,
+        color="black"
+    ))
+
+    fig.show()
