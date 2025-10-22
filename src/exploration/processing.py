@@ -29,8 +29,10 @@ def compute_differences(sv: xr.DataArray,
         for ch in ch_list
     }
 
-def flatten_valid(*arrays):
+def flatten_valid(*arrays, keep_nan: bool = False):
     flats = [arr.values.ravel() for arr in arrays]
+    if keep_nan:
+        return flats
     mask = np.all([~np.isnan(f) for f in flats], axis=0)
     return [f[mask] for f in flats]
 
