@@ -5,7 +5,7 @@ import xarray as xr
 from .data_config import DATA_DICT, EI_DICT
 
 # Import function allowing to import and combine legs as a single `xarray.Dataset`
-def load_survey_ds(survey):
+def load_survey_ds(survey, chunks={"time": 1000, "depth": 100}):
     leg_list = []
     
     for leg_name in EI_DICT.get(survey):
@@ -13,7 +13,7 @@ def load_survey_ds(survey):
 
         leg_path = DATA_DICT.get(leg_name)
 
-        leg_ds = xr.open_dataset(leg_path)
+        leg_ds = xr.open_dataset(leg_path, chunks=chunks)
 
         # Add a 'leg' variable to each dataset
         leg_ds = leg_ds.assign_coords(leg=(('time',), [leg_id]*leg_ds.sizes['time']))

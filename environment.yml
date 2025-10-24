@@ -1,3 +1,4 @@
+name: acoustic-communities
 channels:
   - conda-forge
 dependencies:
@@ -16,4 +17,7 @@ dependencies:
   - notebook
   - pyzmq[version='<25']
   - seaborn
+  - plotly
+  - dask
+  - scikit-image
 prefix: /Users/gaspardringuenet/miniforge3/envs/acoustic-communities

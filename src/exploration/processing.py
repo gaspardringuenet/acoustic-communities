@@ -44,3 +44,8 @@ def sample_safe(*arrays, n_samples: int):
     n = min(len(arrays[0]), n_samples)
     idx = np.random.choice(len(arrays[0]), n)
     return [arr[idx] for arr in arrays]
+
+
+def safe_time_str(t):
+    return np.datetime_as_string(t, unit='s') if np.issubdtype(type(t), np.datetime64) else str(t)
+
