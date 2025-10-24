@@ -1,4 +1,3 @@
-name: acoustic-communities
 channels:
   - conda-forge
 dependencies:
